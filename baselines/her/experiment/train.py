@@ -115,8 +115,8 @@ def launch(
                  '-clip_energy'+str(clip_energy)+\
                  '-version'+str(version)
     else:
-        logdir = osp.join(tempfile.gettempdir(),
-            datetime.datetime.now().strftime("openai-%Y-%m-%d-%H-%M-%S-%f"))
+        logdir = osp.join(os.getcwd()+'/baseline_experiments',
+            datetime.datetime.now().strftime("{}-%Y-%m-%d-%H-%M-%S-%f".format(env_name)))
 
     if rank == 0:
         if logdir or logger.get_dir() is None:
@@ -201,8 +201,7 @@ def launch(
 
 
 @click.command()
-@click.option('--env_name', type=click.Choice(['FetchPickAndPlace-v0', 'HandManipulateBlockFull-v0', \
-        'HandManipulateEggFull-v0', 'HandManipulatePenRotate-v0']), default='FetchPickAndPlace-v0', help='the name of the OpenAI Gym \
+@click.option('--env_name',type=str, default='FetchPickAndPlace-v0', help='the name of the OpenAI Gym \
         environment that you want to train on. We tested EBP on four challenging robotic manipulation tasks, including: \
         FetchPickAndPlace-v0, HandManipulateBlockFull-v0, HandManipulateEggFull-v0, HandManipulatePenRotate-v0')
 @click.option('--n_epochs', type=int, default=50, help='the number of training epochs to run')

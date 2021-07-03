@@ -1,7 +1,8 @@
 from collections import OrderedDict
 import numpy as np
 import tensorflow as tf
-from tensorflow.contrib.staging import StagingArea
+# from tensorflow.contrib.staging import StagingArea
+from tensorflow.python.ops.data_flow_ops import StagingArea
 from baselines import logger
 from baselines.her.util import (
     import_function, store_args, flatten_grads, transitions_in_episode_batch)
@@ -12,7 +13,7 @@ import baselines.common.tf_util as U
 from baselines.common.schedules import LinearSchedule, PiecewiseSchedule
 import json
 
-
+tf.compat.v1.disable_eager_execution()
 
 def dims_to_shapes(input_dims):
     return {key: tuple([val]) if val > 0 else tuple() for key, val in input_dims.items()}
@@ -82,12 +83,12 @@ class DDPG(object):
         self.stage_shapes = stage_shapes
 
         # Create network.
-        with tf.variable_scope(self.scope):
+        with tf.compat.v1.variable_scope(self.scope):
             self.staging_tf = StagingArea(
                 dtypes=[tf.float32 for _ in self.stage_shapes.keys()],
                 shapes=list(self.stage_shapes.values()))
             self.buffer_ph_tf = [
-                tf.placeholder(tf.float32, shape=shape) for shape in self.stage_shapes.values()]
+                tf.compat.v1.placeholder(tf.float32, shape=shape) for shape in self.stage_shapes.values()]
             self.stage_op = self.staging_tf.put(self.buffer_ph_tf)
 
             self._create_network(reuse=reuse)
@@ -307,27 +308,27 @@ class DDPG(object):
         self.buffer.clear_buffer()
 
     def _vars(self, scope):
-        res = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.scope + '/' + scope)
+        res = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, scope=self.scope + '/' + scope)
         assert len(res) > 0
         return res
 
     def _global_vars(self, scope):
-        res = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope + '/' + scope)
+        res = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope=self.scope + '/' + scope)
         return res
 
     def _create_network(self, reuse=False):
         logger.info("Creating a DDPG agent with action space %d x %s..." % (self.dimu, self.max_u))
 
-        self.sess = tf.get_default_session()
+        self.sess = tf.compat.v1.get_default_session()
         if self.sess is None:
-            self.sess = tf.InteractiveSession()
+            self.sess = tf.compat.v1.InteractiveSession()
 
         # running averages
-        with tf.variable_scope('o_stats') as vs:
+        with tf.compat.v1.variable_scope('o_stats') as vs:
             if reuse:
                 vs.reuse_variables()
             self.o_stats = Normalizer(self.dimo, self.norm_eps, self.norm_clip, sess=self.sess)
-        with tf.variable_scope('g_stats') as vs:
+        with tf.compat.v1.variable_scope('g_stats') as vs:
             if reuse:
                 vs.reuse_variables()
             self.g_stats = Normalizer(self.dimg, self.norm_eps, self.norm_clip, sess=self.sess)
@@ -340,12 +341,12 @@ class DDPG(object):
         batch_tf['w'] = tf.reshape(batch_tf['w'], [-1, 1])
 
         # networks
-        with tf.variable_scope('main') as vs:
+        with tf.compat.v1.variable_scope('main') as vs:
             if reuse:
                 vs.reuse_variables()
             self.main = self.create_actor_critic(batch_tf, net_type='main', **self.__dict__)
             vs.reuse_variables()
-        with tf.variable_scope('target') as vs:
+        with tf.compat.v1.variable_scope('target') as vs:
             if reuse:
                 vs.reuse_variables()
             target_batch_tf = batch_tf.copy()
@@ -363,13 +364,13 @@ class DDPG(object):
 
         self.td_error_tf = tf.stop_gradient(target_tf) - self.main.Q_tf
         self.errors_tf = tf.square(self.td_error_tf)
-        self.errors_tf = tf.reduce_mean(batch_tf['w'] * self.errors_tf)
-        self.Q_loss_tf = tf.reduce_mean(self.errors_tf)
+        self.errors_tf = tf.reduce_mean(input_tensor=batch_tf['w'] * self.errors_tf)
+        self.Q_loss_tf = tf.reduce_mean(input_tensor=self.errors_tf)
 
-        self.pi_loss_tf = -tf.reduce_mean(self.main.Q_pi_tf)
-        self.pi_loss_tf += self.action_l2 * tf.reduce_mean(tf.square(self.main.pi_tf / self.max_u))
-        Q_grads_tf = tf.gradients(self.Q_loss_tf, self._vars('main/Q'))
-        pi_grads_tf = tf.gradients(self.pi_loss_tf, self._vars('main/pi'))
+        self.pi_loss_tf = -tf.reduce_mean(input_tensor=self.main.Q_pi_tf)
+        self.pi_loss_tf += self.action_l2 * tf.reduce_mean(input_tensor=tf.square(self.main.pi_tf / self.max_u))
+        Q_grads_tf = tf.gradients(ys=self.Q_loss_tf, xs=self._vars('main/Q'))
+        pi_grads_tf = tf.gradients(ys=self.pi_loss_tf, xs=self._vars('main/pi'))
         assert len(self._vars('main/Q')) == len(Q_grads_tf)
         assert len(self._vars('main/pi')) == len(pi_grads_tf)
         self.Q_grads_vars_tf = zip(Q_grads_tf, self._vars('main/Q'))
@@ -391,7 +392,7 @@ class DDPG(object):
             map(lambda v: v[0].assign(self.polyak * v[0] + (1. - self.polyak) * v[1]), zip(self.target_vars, self.main_vars)))
 
         # initialize all variables
-        tf.variables_initializer(self._global_vars('')).run()
+        tf.compat.v1.variables_initializer(self._global_vars('')).run()
         self._sync_optimizers()
         self._init_target_net()
 
@@ -433,5 +434,5 @@ class DDPG(object):
         # load TF variables
         vars = [x for x in self._global_vars('') if 'buffer' not in x.name]
         assert(len(vars) == len(state["tf"]))
-        node = [tf.assign(var, val) for var, val in zip(vars, state["tf"])]
+        node = [tf.compat.v1.assign(var, val) for var, val in zip(vars, state["tf"])]
         self.sess.run(node)

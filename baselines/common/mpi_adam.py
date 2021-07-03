@@ -52,22 +52,22 @@ class MpiAdam(object):
 @U.in_session
 def test_MpiAdam():
     np.random.seed(0)
-    tf.set_random_seed(0)
+    tf.compat.v1.set_random_seed(0)
 
     a = tf.Variable(np.random.randn(3).astype('float32'))
     b = tf.Variable(np.random.randn(2,5).astype('float32'))
-    loss = tf.reduce_sum(tf.square(a)) + tf.reduce_sum(tf.sin(b))
+    loss = tf.reduce_sum(input_tensor=tf.square(a)) + tf.reduce_sum(input_tensor=tf.sin(b))
 
     stepsize = 1e-2
-    update_op = tf.train.AdamOptimizer(stepsize).minimize(loss)
+    update_op = tf.compat.v1.train.AdamOptimizer(stepsize).minimize(loss)
     do_update = U.function([], loss, updates=[update_op])
 
-    tf.get_default_session().run(tf.global_variables_initializer())
+    tf.compat.v1.get_default_session().run(tf.compat.v1.global_variables_initializer())
     for i in range(10):
         print(i,do_update())
 
-    tf.set_random_seed(0)
-    tf.get_default_session().run(tf.global_variables_initializer())
+    tf.compat.v1.set_random_seed(0)
+    tf.compat.v1.get_default_session().run(tf.compat.v1.global_variables_initializer())
 
     var_list = [a,b]
     lossandgrad = U.function([], [loss, U.flatgrad(loss, var_list)], updates=[update_op])
